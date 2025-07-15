@@ -1,0 +1,102 @@
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
+from app.services.dream_ai.image_gen_service.image_gen_service import DreamAIService
+from app.services.dream_ai.image_gen_service.image_gen_schema import (
+    DreamAnalysisRequest,
+    ImageGenerationRequest,
+    CompleteDreamResponse,
+    DreamAnalysisResponse,
+    ImageGenerationResponse
+)
+
+router = APIRouter(prefix="/api/v1/dream-ai", tags=["Dream AI"])
+
+# Dependency to get the service
+def get_dream_service() -> DreamAIService:
+    try:
+        return DreamAIService()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Service initialization failed: {str(e)}")
+
+@router.post("/analyze", response_model=DreamAnalysisResponse)
+async def analyze_dream(
+    request: DreamAnalysisRequest,
+    service: DreamAIService = Depends(get_dream_service)
+):
+    """
+    Analyze and interpret a user's dream description.
+    
+    - **dream_description**: The user's description of their dream
+    - **user_name**: Optional name to personalize the response
+    """
+    try:
+        result = await service.analyze_dream_only(request)
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Configuration error: {str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dream analysis failed: {str(e)}")
+
+@router.post("/generate-image", response_model=ImageGenerationResponse)
+async def generate_dream_image(
+    request: ImageGenerationRequest,
+    service: DreamAIService = Depends(get_dream_service)
+):
+    """
+    Generate an image based on dream description using DALL-E.
+    
+    - **dream_description**: The dream description to visualize
+    - **style**: Style preference for the generated image
+    """
+    try:
+        result = await service.generate_image_only(request)
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Configuration error: {str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+
+@router.post("/complete-interpretation", response_model=CompleteDreamResponse)
+async def complete_dream_interpretation(
+    dream_description: str,
+    user_name: str = None,
+    image_style: str = "realistic",
+    service: DreamAIService = Depends(get_dream_service)
+):
+    """
+    Complete dream interpretation including analysis and image generation.
+    
+    - **dream_description**: The user's dream description
+    - **user_name**: Optional user name for personalization
+    - **image_style**: Style for the generated image (realistic, artistic, surreal, minimalist, dark)
+    """
+    try:
+        result = await service.complete_dream_interpretation(
+            dream_description=dream_description,
+            user_name=user_name,
+            image_style=image_style
+        )
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Configuration error: {str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Complete interpretation failed: {str(e)}")
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "Dream AI API"}
+
+@router.get("/models")
+async def get_models_info(service: DreamAIService = Depends(get_dream_service)):
+    """Get information about the AI models being used"""
+    model_info = service.openai_manager.get_model_info()
+    return {
+        "status": "active",
+        "models": model_info,
+        "capabilities": {
+            "dream_analysis": f"Powered by {model_info['chat_model']}",
+            "image_generation": f"Powered by {model_info['image_model']}",
+            "supported_styles": ["realistic", "artistic", "surreal", "minimalist", "dark"]
+        }
+    }

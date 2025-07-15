@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # FastAPI Application
+  dream-ai-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dream-ai-backend
+    restart: always
+    ports:
+      - "8020:8020"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APP_NAME=Dream AI Interpreter
+      - DEBUG=false
+    env_file:
+      - .env
+    networks:
+      - dream-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx Reverse Proxy (Optional - can be enabled if needed)
+  nginx:
+    image: nginx:alpine
+    container_name: dream-ai-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - dream-ai-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - dream-ai-app
+    profiles:
+      - nginx  # Only run when nginx profile is specified
+
+  # Redis for caching (Optional - can be enabled if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: dream-ai-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dream-ai-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - redis  # Only run when redis profile is specified
+
+# Networks
+networks:
+  dream-ai-network:
+    driver: bridge
+    name: dream-ai-network
+
+# Volumes
+volumes:
+  redis_data:
+    driver: local
+    name: dream-ai-redis-data
