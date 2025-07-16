@@ -40,6 +40,10 @@ async def root():
             "analyze": "/api/v1/dream-ai/analyze",
             "generate_image": "/api/v1/dream-ai/generate-image",
             "complete": "/api/v1/dream-ai/complete-interpretation"
+        },
+        "features": {
+            "style": "hardcoded to realistic",
+            "personalization": "removed user_name field"
         }
     }
 

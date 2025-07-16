@@ -4,6 +4,7 @@ from app.services.dream_ai.image_gen_service.image_gen_service import DreamAISer
 from app.services.dream_ai.image_gen_service.image_gen_schema import (
     DreamAnalysisRequest,
     ImageGenerationRequest,
+    CompleteDreamRequest,
     CompleteDreamResponse,
     DreamAnalysisResponse,
     ImageGenerationResponse
@@ -27,7 +28,6 @@ async def analyze_dream(
     Analyze and interpret a user's dream description.
     
     - **dream_description**: The user's description of their dream
-    - **user_name**: Optional name to personalize the response
     """
     try:
         result = await service.analyze_dream_only(request)
@@ -46,7 +46,7 @@ async def generate_dream_image(
     Generate an image based on dream description using DALL-E.
     
     - **dream_description**: The dream description to visualize
-    - **style**: Style preference for the generated image
+    Note: Style is hardcoded to 'realistic' for consistency
     """
     try:
         result = await service.generate_image_only(request)
@@ -58,23 +58,18 @@ async def generate_dream_image(
 
 @router.post("/complete-interpretation", response_model=CompleteDreamResponse)
 async def complete_dream_interpretation(
-    dream_description: str,
-    user_name: str = None,
-    image_style: str = "realistic",
+    request: CompleteDreamRequest,
     service: DreamAIService = Depends(get_dream_service)
 ):
     """
     Complete dream interpretation including analysis and image generation.
     
     - **dream_description**: The user's dream description
-    - **user_name**: Optional user name for personalization
-    - **image_style**: Style for the generated image (realistic, artistic, surreal, minimalist, dark)
+    Note: Style is hardcoded to 'realistic' for consistency
     """
     try:
         result = await service.complete_dream_interpretation(
-            dream_description=dream_description,
-            user_name=user_name,
-            image_style=image_style
+            dream_description=request.dream_description
         )
         return result
     except ValueError as ve:
@@ -97,6 +92,6 @@ async def get_models_info(service: DreamAIService = Depends(get_dream_service)):
         "capabilities": {
             "dream_analysis": f"Powered by {model_info['chat_model']}",
             "image_generation": f"Powered by {model_info['image_model']}",
-            "supported_styles": ["realistic", "artistic", "surreal", "minimalist", "dark"]
+            "supported_styles": ["realistic (hardcoded)"]
         }
     }
