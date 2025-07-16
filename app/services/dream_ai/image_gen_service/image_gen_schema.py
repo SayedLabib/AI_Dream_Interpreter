@@ -1,25 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-class DreamAnalysisRequest(BaseModel):
-    dream_description: str = Field(..., description="User's dream description")
+class DreamPattern(BaseModel):
+    adventure: float = Field(..., description="Percentage of adventure elements in the dream (0-100)")
+    nature: float = Field(..., description="Percentage of nature elements in the dream (0-100)")
+    homeFamily: float = Field(..., description="Percentage of home & family elements in the dream (0-100)")
+    nightmare: float = Field(..., description="Percentage of nightmare elements in the dream (0-100)")
+    romantic: float = Field(..., description="Percentage of romantic elements in the dream (0-100)")
+    fantasySurreal: float = Field(..., description="Percentage of fantasy & surreal elements in the dream (0-100)")
 
-class DreamAnalysisResponse(BaseModel):
-    interpretation: str = Field(..., description="AI Interpretation of the dream including symbolism analysis")
-    emotions: str = Field(..., description="Emotions associated with the dream")   
-    suggestions: str = Field(..., description="Suggestions based on the dream analysis formatted as numbered or bulleted points") 
-
-class ImageGenerationRequest(BaseModel):
-    dream_description: str = Field(..., description="User's dream description")
-
-class ImageGenerationResponse(BaseModel):
-    image_url: str = Field(..., description="URL of the generated dream image")
-    prompt_used: str = Field(..., description="Prompt used for image generation")
+    class Config:
+        populate_by_name = True
 
 class CompleteDreamRequest(BaseModel):
     dream_description: str = Field(..., description="User's dream description")
 
 class CompleteDreamResponse(BaseModel):
-    analysis: DreamAnalysisResponse
-    generated_image: ImageGenerationResponse
-    processing_time: float = Field(..., description="Time taken to process the request in seconds")
+    title: str = Field(..., description="A descriptive title for the dream")
+    content: str = Field(..., description="Complete dream analysis including interpretation, emotions, and suggestions")
+    imageUrl: str = Field(..., description="URL of the generated dream image")
+    dreamPatterns: DreamPattern = Field(..., description="Percentage breakdown of dream categories")

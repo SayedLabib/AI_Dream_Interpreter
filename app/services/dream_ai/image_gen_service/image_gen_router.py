@@ -2,12 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.services.dream_ai.image_gen_service.image_gen_service import DreamAIService
 from app.services.dream_ai.image_gen_service.image_gen_schema import (
-    DreamAnalysisRequest,
-    ImageGenerationRequest,
     CompleteDreamRequest,
-    CompleteDreamResponse,
-    DreamAnalysisResponse,
-    ImageGenerationResponse
+    CompleteDreamResponse
 )
 
 router = APIRouter(prefix="/api/v1/dream-ai", tags=["Dream AI"])
@@ -18,43 +14,6 @@ def get_dream_service() -> DreamAIService:
         return DreamAIService()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Service initialization failed: {str(e)}")
-
-@router.post("/analyze", response_model=DreamAnalysisResponse)
-async def analyze_dream(
-    request: DreamAnalysisRequest,
-    service: DreamAIService = Depends(get_dream_service)
-):
-    """
-    Analyze and interpret a user's dream description.
-    
-    - **dream_description**: The user's description of their dream
-    """
-    try:
-        result = await service.analyze_dream_only(request)
-        return result
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=f"Configuration error: {str(ve)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dream analysis failed: {str(e)}")
-
-@router.post("/generate-image", response_model=ImageGenerationResponse)
-async def generate_dream_image(
-    request: ImageGenerationRequest,
-    service: DreamAIService = Depends(get_dream_service)
-):
-    """
-    Generate an image based on dream description using DALL-E.
-    
-    - **dream_description**: The dream description to visualize
-    Note: Style is hardcoded to 'realistic' for consistency
-    """
-    try:
-        result = await service.generate_image_only(request)
-        return result
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=f"Configuration error: {str(ve)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
 
 @router.post("/complete-interpretation", response_model=CompleteDreamResponse)
 async def complete_dream_interpretation(
