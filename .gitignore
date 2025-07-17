@@ -205,6 +205,27 @@ tmp/
 uploads/
 downloads/
 
+# Audio files (STT testing)
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.mpeg
+*.mpga
+*.webm
+*.flac
+*.aac
+*.ogg
+
+# Transcription outputs
+*_transcription.txt
+transcriptions/
+
+# Test scripts (PowerShell)
+test_*.ps1
+simple_*.ps1
+docker_manager.ps1
+
 # SSL certificates
 *.pem
 *.key

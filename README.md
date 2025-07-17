@@ -1,8 +1,8 @@
 # Dream AI Interpreter 🌙✨
 
-**AI-Powered Dream Analysis & Visualization Service**
+**AI-Powered Dream Analysis, Visualization & Speech-to-Text Service**
 
-A sophisticated FastAPI-based web service that combines the power of **OpenAI's GPT-3.5 Turbo** and **DALL-E 3** to provide comprehensive dream interpretation and visual representation. Built with modern Python architecture, this service offers empathetic dream analysis through "Dr. Elena Nightingale," a virtual dream analyst with expertise in Jungian psychology.
+A sophisticated FastAPI-based web service that combines the power of **OpenAI's GPT-3.5 Turbo**, **DALL-E 3**, and **Whisper** to provide comprehensive dream interpretation, visual representation, and voice transcription capabilities. Built with modern Python architecture, this service offers empathetic dream analysis through "Dr. Elena Nightingale," a virtual dream analyst with expertise in Jungian psychology, plus the ability to transcribe spoken dreams into text.
 
 ## � Core Features
 
@@ -17,6 +17,13 @@ A sophisticated FastAPI-based web service that combines the power of **OpenAI's 
 - **Smart Content Filtering**: Automatic handling of sensitive content with metaphorical representations
 - **Contextual Prompting**: AI-generated prompts that capture dream essence while staying policy-compliant
 - **Realistic Style**: Focused on photorealistic representations with cinematic lighting
+
+### 🎙️ **Speech-to-Text Transcription**
+- **OpenAI Whisper Integration**: State-of-the-art audio transcription
+- **Multiple Format Support**: mp3, wav, m4a, mp4, mpeg, mpga, webm
+- **Language Detection**: Auto-detect or specify language (25+ languages supported)
+- **Large File Support**: Up to 25MB audio files
+- **Voice-to-Dream Workflow**: Speak your dreams and get full analysis
 
 ### 📊 **Dream Pattern Classification**
 - **Six Categories**: Adventure, Nature, Home & Family, Nightmare, Romantic, Fantasy & Surreal
@@ -87,22 +94,28 @@ AI_Dream_Interpreter/
 │   └── services/                          # Business logic layer
 │       └── dream_ai/                      # Dream AI service domain
 │           ├── api_manager/               # External API integrations
-│           │   └── image_gen_manager.py   # OpenAI API client & prompt engineering
-│           └── image_gen_service/         # Main service layer
-│               ├── image_gen_router.py    # FastAPI routes & endpoints
-│               ├── image_gen_schema.py    # Pydantic models & validation
-│               └── image_gen_service.py   # Business logic orchestration
+│           │   ├── image_gen_manager.py   # OpenAI DALL-E & GPT integration
+│           │   └── Speech_to_text_manager.py # OpenAI Whisper integration
+│           ├── image_gen_service/         # Dream analysis service layer
+│           │   ├── image_gen_router.py    # Dream analysis FastAPI routes
+│           │   ├── image_gen_schema.py    # Dream analysis Pydantic models
+│           │   └── image_gen_service.py   # Dream analysis business logic
+│           └── Speech_to_text/            # Speech-to-Text service layer
+│               ├── speech_to_text_router.py # STT FastAPI routes
+│               └── speech_text_shcema.py  # STT Pydantic models
 ├── nginx/                                 # Nginx reverse proxy config
 │   └── nginx.conf                         # Production-ready proxy settings
 ├── docker-compose.yml                     # Multi-service orchestration
+├── Dockerfile                             # Container definition
 ├── requirements.txt                       # Python dependencies
-├── test_endpoint.py                       # API testing script
-└── .env                                   # Environment configuration
+├── .env                                   # Environment configuration
+├── .gitignore                             # Git ignore rules
+└── .dockerignore                          # Docker ignore rules
 ```
 
 ## 🛠️ API Reference
 
-### Core Endpoint
+### Dream Analysis Endpoints
 
 #### **POST** `/api/v1/dream-ai/complete-interpretation`
 Complete dream analysis with image generation.
@@ -131,14 +144,66 @@ Complete dream analysis with image generation.
 }
 ```
 
+### Speech-to-Text Endpoints
+
+#### **POST** `/api/v1/speech-to-text/transcribe`
+Transcribe audio file to text using OpenAI Whisper.
+
+**Request:**
+- **Form Data**: `audio_file` (file, max 25MB)
+- **Optional**: `language` (string, e.g., "en", "es", "fr")
+
+**Supported Formats:** mp3, wav, m4a, mp4, mpeg, mpga, webm
+
+**Response:**
+```json
+{
+  "text": "I had this amazing dream where I was flying...",
+  "language": "en",
+  "filename": "dream_recording.wav",
+  "file_size_bytes": 1048576,
+  "processing_time": 3.45
+}
+```
+
+#### **GET** `/api/v1/speech-to-text/supported-formats`
+Get information about supported audio formats and limitations.
+
+#### **GET** `/api/v1/speech-to-text/health`
+Speech-to-Text service health check.
+
 ### Utility Endpoints
 
 - **GET** `/` - API information and model details
 - **GET** `/health` - Application health status
-- **GET** `/api/v1/dream-ai/health` - Service-specific health check
+- **GET** `/api/v1/dream-ai/health` - Dream analysis service health check
 - **GET** `/api/v1/dream-ai/models` - AI model information
 - **GET** `/docs` - Interactive API documentation (Swagger UI)
 - **GET** `/redoc` - Alternative API documentation
+
+## 🎙️ Using Speech-to-Text
+
+### Basic Audio Transcription
+```bash
+curl -X POST "http://localhost:8020/api/v1/speech-to-text/transcribe" \
+  -F "audio_file=@dream_recording.wav" \
+  -F "language=en"
+```
+
+### PowerShell Example
+```powershell
+$form = @{
+    audio_file = Get-Item "dream_recording.wav"
+    language = "en"
+}
+Invoke-RestMethod -Uri "http://localhost:8020/api/v1/speech-to-text/transcribe" -Method Post -Form $form
+```
+
+### Complete Voice-to-Dream Workflow
+1. **Record** your dream description as an audio file
+2. **Upload** to `/api/v1/speech-to-text/transcribe` to get text
+3. **Use** the transcribed text with `/api/v1/dream-ai/complete-interpretation`
+4. **Receive** complete dream analysis with visualization
 
 ## 🐳 Docker Deployment Options
 
@@ -323,10 +388,16 @@ Edit `nginx/nginx.conf` for:
   - Style: Realistic with cinematic lighting
   - Safety: Automatic content filtering and metaphorical representations
 
+- **Speech Model**: `whisper-1`
+  - Purpose: Audio transcription and speech-to-text
+  - Languages: 25+ languages supported with auto-detection
+  - Formats: mp3, wav, m4a, mp4, mpeg, mpga, webm
+
 ### Model Performance
 - **Analysis Time**: ~5-10 seconds per interpretation
 - **Image Generation**: ~10-15 seconds per image
-- **Total Processing**: ~15-25 seconds end-to-end
+- **Audio Transcription**: ~3-8 seconds per minute of audio
+- **Total Processing**: ~15-30 seconds end-to-end
 - **Rate Limits**: Handled automatically with retry logic
 
 ## � Privacy & Security
@@ -366,14 +437,19 @@ Edit `nginx/nginx.conf` for:
 **Features:**
 - ✅ Complete dream interpretation with GPT-3.5 Turbo
 - ✅ Realistic image generation with DALL-E 3
+- ✅ Speech-to-text transcription with Whisper
 - ✅ Six-category dream pattern analysis
 - ✅ Dr. Elena Nightingale persona
+- ✅ Multi-format audio support (mp3, wav, m4a, etc.)
+- ✅ Multi-language transcription (25+ languages)
 - ✅ Docker deployment support
 - ✅ Comprehensive API documentation
 - ✅ Production-ready architecture
 
 ### Future Enhancements
 - 🔄 **Response Caching** - Redis-based caching for improved performance
+- 🔄 **Voice-to-Dream Pipeline** - Direct audio upload to complete dream analysis
+- 🔄 **Real-time Transcription** - WebSocket-based live audio processing
 - 🔄 **User Accounts** - Optional user authentication and dream history
 - 🔄 **Batch Processing** - Multiple dream analysis in single request
 - 🔄 **Advanced Analytics** - Dream pattern trends and insights

@@ -90,6 +90,25 @@ test_*
 tests/
 *_test.py
 
+# Audio test files (STT development)
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.mpeg
+*.mpga
+*.webm
+*.flac
+*.aac
+*.ogg
+
+# Transcription outputs
+*_transcription.txt
+transcriptions/
+
+# PowerShell test scripts
+*.ps1
+
 # Backup files
 *.bak
 *.backup
