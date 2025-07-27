@@ -1,5 +1,7 @@
 import openai
 import asyncio
+import json
+import re
 from typing import Optional, Dict, Any
 from app.core.config import settings
 from app.services.dream_ai.image_gen_service.image_gen_schema import DreamPattern
@@ -16,10 +18,10 @@ class OpenAIManager:
         self.client = openai.OpenAI(api_key=settings.openai_api_key)
         
         # Model configurations
-        self.chat_model = "gpt-3.5-turbo"
+        self.chat_model = "gpt-4o-mini"  # Better for JSON formatting than gpt-3.5-turbo
         self.image_model = "dall-e-3"
-        self.max_tokens = 1500
-        self.temperature = 0.7
+        self.max_tokens = 2000
+        self.temperature = 0.3  # Lower temperature for more consistent JSON output
         
         # Define common system message to avoid duplication
         self.system_message = "You are Dr. Elena Nightingale, a warm and deeply compassionate dream analyst with 20+ years of experience in Jungian psychology, depth psychology, and symbolic interpretation. You genuinely care about each person who shares their dreams with you, understanding that dreams can sometimes be frightening, confusing, or emotionally overwhelming. Your heart goes out to anyone experiencing difficult dreams, and you always respond with genuine empathy and concern. You have helped thousands of people understand their subconscious minds through dream analysis, always treating each dream as sacred and meaningful. When someone shares a troubling dream, you acknowledge their feelings with phrases like 'I can understand how unsettling this must have been for you' or 'It's completely natural to feel concerned about such vivid imagery.' You validate their emotions while gently guiding them toward healing and understanding. Your approach combines scientific psychological principles with deep human compassion and intuitive symbolic understanding. You never minimize someone's experience, always seek the deeper meaning with love and care, and present even the most difficult themes as opportunities for growth, healing, and self-understanding. Your responses feel like receiving comfort and wisdom from a caring mentor who truly understands the complexity of the human psyche."
@@ -32,139 +34,279 @@ class OpenAIManager:
             "description": f"Using {self.chat_model} for dream analysis and {self.image_model} for image generation"
         }
 
+    def _extract_json_from_response(self, text: str) -> Optional[Dict]:
+        """Extract JSON from response text with multiple fallback strategies"""
+        # Strategy 1: Try to find JSON block between ```json and ```
+        json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        if json_block_match:
+            try:
+                return json.loads(json_block_match.group(1))
+            except json.JSONDecodeError:
+                pass
+        
+        # Strategy 2: Find the largest JSON object in the text
+        json_matches = list(re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL))
+        for match in sorted(json_matches, key=lambda m: len(m.group(0)), reverse=True):
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                continue
+        
+        # Strategy 3: Try to parse the entire text as JSON
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        return None
+
+    def _calculate_pattern_scores(self, dream_text: str, analysis_text: str) -> DreamPattern:
+        """Calculate dream pattern scores using keyword analysis and content scoring"""
+        combined_text = f"{dream_text} {analysis_text}".lower()
+        print(f"[Analyzing text]: {combined_text[:300]}...")
+        
+        # Generic keyword patterns - no bias toward specific dream types
+        pattern_keywords = {
+            'adventure': [
+                'travel', 'traveling', 'journey', 'quest', 'explore', 'exploring', 'exploration', 
+                'adventure', 'expedition', 'voyage', 'discover', 'discovery', 'movement', 'moving',
+                'run', 'running', 'walk', 'walking', 'climb', 'climbing', 'drive', 'driving',
+                'chase', 'chasing', 'escape', 'escaping', 'pursue', 'pursuing', 'search', 'searching'
+            ],
+            'nature': [
+                'animal', 'animals', 'dog', 'cat', 'bird', 'fish', 'tree', 'trees', 'forest',
+                'ocean', 'sea', 'river', 'lake', 'water', 'mountain', 'mountains', 'sky',
+                'flower', 'flowers', 'grass', 'field', 'garden', 'park', 'beach', 'desert',
+                'rain', 'snow', 'wind', 'storm', 'sun', 'moon', 'star', 'stars', 'nature',
+                'outdoor', 'outside', 'landscape', 'weather', 'season', 'plant', 'plants'
+            ],
+            'homeFamily': [
+                'home', 'house', 'room', 'bedroom', 'kitchen', 'living room', 'bathroom',
+                'family', 'mother', 'father', 'mom', 'dad', 'parent', 'parents', 'child',
+                'children', 'son', 'daughter', 'brother', 'sister', 'sibling', 'grandparent',
+                'grandmother', 'grandfather', 'relative', 'childhood', 'domestic', 'household',
+                'marriage', 'wedding', 'divorce', 'relationship', 'friendship', 'friend'
+            ],
+            'nightmare': [
+                'fear', 'afraid', 'scared', 'terror', 'terrified', 'panic', 'anxiety', 'anxious',
+                'nightmare', 'scary', 'frightening', 'frightened', 'horror', 'horrible',
+                'monster', 'demon', 'ghost', 'evil', 'dark', 'darkness', 'shadow', 'danger',
+                'dangerous', 'threat', 'threatening', 'attack', 'attacking', 'hurt', 'pain',
+                'death', 'dying', 'dead', 'kill', 'killing', 'violence', 'violent', 'blood',
+                'trapped', 'lost', 'falling', 'drowning', 'suffocating', 'helpless'
+            ],
+            'romantic': [
+                'love', 'loving', 'romance', 'romantic', 'kiss', 'kissing', 'hug', 'hugging',
+                'embrace', 'embracing', 'attraction', 'attractive', 'beautiful', 'handsome',
+                'partner', 'boyfriend', 'girlfriend', 'husband', 'wife', 'lover', 'dating',
+                'relationship', 'intimate', 'intimacy', 'passion', 'passionate', 'desire',
+                'flirt', 'flirting', 'seduction', 'sexual', 'affection', 'affectionate',
+                'wedding', 'marriage', 'engagement', 'couple'
+            ],
+            'fantasySurreal': [
+                'magic', 'magical', 'spell', 'wizard', 'witch', 'fantasy', 'mythical',
+                'dragon', 'unicorn', 'fairy', 'angel', 'demon', 'god', 'goddess',
+                'fly', 'flying', 'float', 'floating', 'levitate', 'levitating',
+                'transform', 'transformation', 'shapeshifting', 'metamorphosis',
+                'impossible', 'surreal', 'bizarre', 'strange', 'weird', 'unusual',
+                'dreamlike', 'unreal', 'supernatural', 'paranormal', 'psychic',
+                'teleport', 'telepathy', 'time travel', 'parallel universe',
+                'giant', 'tiny', 'shrink', 'grow', 'morph', 'change', 'mutate'
+            ]
+        }
+        
+        # Calculate raw scores based on keyword frequency and context weight
+        raw_scores = {}
+        total_words = len(combined_text.split())
+        
+        for category, keywords in pattern_keywords.items():
+            score = 0
+            matched_keywords = []
+            
+            for keyword in keywords:
+                # Count exact word matches (not just substring matches)
+                import re
+                word_pattern = r'\b' + re.escape(keyword) + r'\b'
+                matches = re.findall(word_pattern, combined_text)
+                count = len(matches)
+                
+                if count > 0:
+                    matched_keywords.append(f"{keyword}({count})")
+                    # Weight keywords found in original dream higher than in analysis
+                    dream_weight = 2.0 if re.search(word_pattern, dream_text.lower()) else 1.0
+                    # Also consider keyword importance (longer keywords = more specific)
+                    keyword_weight = len(keyword.split()) * 1.2
+                    score += count * dream_weight * keyword_weight
+            
+            raw_scores[category] = score
+            if matched_keywords:
+                print(f"[{category}]: {matched_keywords} = {score:.1f}")
+        
+        print(f"[Raw scores]: {raw_scores}")
+        
+        # Normalize scores to percentages (0-100)
+        total_score = sum(raw_scores.values())
+        
+        if total_score == 0:
+            # If no keywords matched, return balanced low scores
+            print("[No keywords matched - using balanced fallback]")
+            return DreamPattern(
+                adventure=15.0,
+                nature=15.0,
+                homeFamily=15.0,
+                nightmare=15.0,
+                romantic=15.0,
+                fantasySurreal=25.0  # Dreams are inherently a bit surreal
+            )
+        
+        # Convert to percentages
+        normalized_scores = {}
+        for category, score in raw_scores.items():
+            percentage = (score / total_score) * 100
+            normalized_scores[category] = round(percentage, 1)
+        
+        print(f"[Normalized scores]: {normalized_scores}")
+        
+        return DreamPattern(
+            adventure=normalized_scores['adventure'],
+            nature=normalized_scores['nature'],
+            homeFamily=normalized_scores['homeFamily'],
+            nightmare=normalized_scores['nightmare'],
+            romantic=normalized_scores['romantic'],
+            fantasySurreal=normalized_scores['fantasySurreal']
+        )
+
     async def analyze_dream_complete(self, dream_description: str, image_prompt: str) -> Dict[str, Any]:
         """
         Complete dream analysis with title, content, and dream pattern categorization
         """
-        prompt = f"""
-        You are Dr. Elena Nightingale, an expert dream analyst. CRITICAL: Respond with VALID JSON ONLY using EXACT field names.
         
-        Dream: {dream_description}
-        Image: {image_prompt}
-        
-        YOU MUST use these EXACT field names in dreamPatterns - NO OTHER VARIATIONS ALLOWED:
-        - "adventure" (NOT Adventure)
-        - "nature" (NOT Nature) 
-        - "homeFamily" (NOT Home & Family, NOT Home_Family)
-        - "nightmare" (NOT Nightmare)
-        - "romantic" (NOT Romantic)
-        - "fantasySurreal" (NOT Fantasy & Surreal, NOT Fantasy_Surreal)
-        
-        Content requirements: Write a comprehensive dream analysis (300-400 words) as one flowing narrative that includes:
-        - Detailed interpretation of dream symbols using Jungian psychology
-        - Emotional acknowledgment with empathetic phrases like "I can understand how this dream may have felt"
-        - Practical suggestions for working with the dream (journaling, meditation, reflection)
-        
-        Maintain Dr. Elena's warm, mentor-like voice throughout.
-        
-        Pattern scoring (0-100 based on actual dream content):
-        - adventure: travel, exploration, journeys, movement, discovery
-        - nature: animals, plants, weather, landscapes, water, natural elements
-        - homeFamily: houses, family members, childhood, domestic settings, relationships
-        - nightmare: fear, anxiety, chasing, falling, scary elements, terror
-        - romantic: love, intimate moments, passion, relationships, attraction
-        - fantasySurreal: magic, flying, impossible scenarios, transformation, surreal elements
-        
-        Respond with valid JSON in this exact format:
-        {{
-            "title": "Dream Title Here",
-            "content": "Your complete analysis as one continuous string with natural paragraph breaks",
-            "dreamPatterns": {{
-                "adventure": 25,
-                "nature": 40,
-                "homeFamily": 10,
-                "nightmare": 5,
-                "romantic": 0,
-                "fantasySurreal": 60
-            }}
-        }}
-        
-        RESPOND WITH VALID JSON ONLY - NO EXTRA TEXT!
-        """
-
+        # Step 1: Generate the analysis content first
         try:
-            response = await asyncio.to_thread(
+            analysis_response = await asyncio.to_thread(
                 self.client.chat.completions.create,
                 model=self.chat_model,
                 messages=[
-                    {"role": "system", "content": "You are Dr. Elena Nightingale, a warm and deeply compassionate dream analyst with 20+ years of experience in Jungian psychology and symbolic interpretation. You provide detailed, caring dream analysis that combines psychological insight with genuine empathy. You respond only with valid JSON in the exact format requested, ensuring your content is rich, detailed, and emotionally supportive."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": self.system_message},
+                    {"role": "user", "content": f"""
+                    Please provide a comprehensive dream analysis for: {dream_description}
+                    
+                    Include:
+                    1. A meaningful title (4-8 words)
+                    2. Detailed interpretation using Jungian psychology (300-400 words)
+                    3. Empathetic acknowledgment of emotions
+                    4. Practical suggestions for working with the dream
+                    
+                    Format as: Title: [title here]
+                    Analysis: [full analysis here]
+                    """}
                 ],
-                max_tokens=2000,
-                temperature=0.7
+                max_tokens=self.max_tokens,
+                temperature=self.temperature
             )
             
-            response_text = response.choices[0].message.content.strip()
+            analysis_text = analysis_response.choices[0].message.content.strip()
+            print(f"[Analysis Response]: {analysis_text}")
             
-            # Parse JSON response
-            import json
-            try:
-                result = json.loads(response_text)
-                
-                # Clean up content field - ensure it's a string
-                content = result.get('content', '')
-                
-                # Handle cases where AI returns content as an object instead of string
-                if isinstance(content, dict):
-                    # If content is a dictionary, try to extract text values
-                    content_parts = []
-                    for key, value in content.items():
-                        if isinstance(value, str):
-                            content_parts.append(value)
-                    content = ' '.join(content_parts) if content_parts else "Dream analysis provided with symbolic interpretation, emotional acknowledgment, and practical guidance."
-                elif not isinstance(content, str):
-                    # If content is not a string or dict, convert to string
-                    content = str(content) if content else "Dream analysis provided with symbolic interpretation, emotional acknowledgment, and practical guidance."
-                
-                # Create DreamPattern object with comprehensive field mapping
-                pattern_data = result.get('dreamPatterns', {})
-                
-                # Helper function to safely extract and convert to float
+            # Extract title and content
+            title_match = re.search(r'Title:\s*(.+)', analysis_text)
+            title = title_match.group(1).strip() if title_match else "Dream Analysis"
+            
+            analysis_match = re.search(r'Analysis:\s*(.+)', analysis_text, re.DOTALL)
+            content = analysis_match.group(1).strip() if analysis_match else analysis_text
+            
+        except Exception as e:
+            print(f"[Analysis Error]: {e}")
+            title = "Dream Analysis"
+            content = f"Analysis of your dream about {dream_description}. This dream contains meaningful symbols that reflect your subconscious mind and inner experiences."
+        
+        # Step 2: Calculate pattern scores using our own logic (don't rely on OpenAI for this)
+        dream_pattern = self._calculate_pattern_scores(dream_description, content)
+        print(f"[Calculated Patterns]: {dream_pattern}")
+        
+        # Step 3: Try to get better scores from OpenAI without examples
+        try:
+            pattern_response = await asyncio.to_thread(
+                self.client.chat.completions.create,
+                model=self.chat_model,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are a dream pattern analyzer. You must respond with ONLY a JSON object containing numerical scores 0-100 for dream patterns. No other text."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""Analyze this dream and score how much each pattern is present (0-100):
+
+Dream: {dream_description}
+
+Score these patterns based on the dream content:
+- adventure: exploration, travel, journeys, quests, movement, discovery
+- nature: animals, plants, weather, landscapes, water, natural elements
+- homeFamily: houses, family members, childhood, domestic settings, relationships
+- nightmare: fear, anxiety, chasing, falling, scary elements, terror
+- romantic: love, intimate moments, passion, relationships, attraction  
+- fantasySurreal: magic, flying, impossible scenarios, transformation, surreal elements
+
+Respond with ONLY this JSON format:
+{{
+    "adventure": [score],
+    "nature": [score], 
+    "homeFamily": [score],
+    "nightmare": [score],
+    "romantic": [score],
+    "fantasySurreal": [score]
+}}"""
+                    }
+                ],
+                max_tokens=200,
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            
+            pattern_text = pattern_response.choices[0].message.content.strip()
+            print(f"[Pattern Response]: {pattern_text}")
+            
+            # Try to parse the pattern scores
+            pattern_json = self._extract_json_from_response(pattern_text)
+            if pattern_json:
                 def safe_float(value, default=0.0):
                     try:
-                        return float(value) if value is not None else default
+                        return max(0.0, min(100.0, float(value)))  # Clamp between 0-100
                     except (ValueError, TypeError):
                         return default
                 
-                # Normalize field names - handle all possible variations
-                def get_pattern_value(patterns, field_variations):
-                    for variation in field_variations:
-                        if variation in patterns and patterns[variation] is not None:
-                            return safe_float(patterns[variation])
-                    return 0.0
-                
-                dream_pattern = DreamPattern(
-                    adventure=get_pattern_value(pattern_data, ['adventure', 'Adventure']),
-                    nature=get_pattern_value(pattern_data, ['nature', 'Nature']),
-                    homeFamily=get_pattern_value(pattern_data, ['homeFamily', 'Home & Family', 'Home_Family', 'familyHome']),
-                    nightmare=get_pattern_value(pattern_data, ['nightmare', 'Nightmare']),
-                    romantic=get_pattern_value(pattern_data, ['romantic', 'Romantic']),
-                    fantasySurreal=get_pattern_value(pattern_data, ['fantasySurreal', 'Fantasy & Surreal', 'Fantasy_Surreal', 'surreal'])
+                # Override our calculated patterns with OpenAI's scores if they seem valid
+                ai_patterns = DreamPattern(
+                    adventure=safe_float(pattern_json.get('adventure', 0)),
+                    nature=safe_float(pattern_json.get('nature', 0)),
+                    homeFamily=safe_float(pattern_json.get('homeFamily', 0)),
+                    nightmare=safe_float(pattern_json.get('nightmare', 0)),
+                    romantic=safe_float(pattern_json.get('romantic', 0)),
+                    fantasySurreal=safe_float(pattern_json.get('fantasySurreal', 0))
                 )
                 
-                return {
-                    'title': result['title'],
-                    'content': content,
-                    'dreamPatterns': dream_pattern
-                }
+                # Check if AI patterns seem reasonable (not all zeros or the hardcoded example)
+                total_score = (ai_patterns.adventure + ai_patterns.nature + ai_patterns.homeFamily + 
+                              ai_patterns.nightmare + ai_patterns.romantic + ai_patterns.fantasySurreal)
                 
-            except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
-                return {
-                    'title': "A Meaningful Dream Experience",
-                    'content': response_text,
-                    'dreamPatterns': DreamPattern(
-                        adventure=20.0,
-                        nature=20.0,
-                        homeFamily=20.0,
-                        nightmare=10.0,
-                        romantic=15.0,
-                        fantasySurreal=15.0
-                    )
-                }
-                
+                # Don't use if it's the exact hardcoded example or all zeros
+                hardcoded_total = 25 + 40 + 10 + 5 + 0 + 60  # 140
+                if total_score > 10 and abs(total_score - hardcoded_total) > 20:
+                    dream_pattern = ai_patterns
+                    print(f"[Using AI Patterns]: {ai_patterns}")
+                else:
+                    print(f"[AI patterns rejected, using calculated]: total={total_score}")
+                    
         except Exception as e:
-            raise Exception(f"Error analyzing dream completely with {self.chat_model}: {str(e)}")
+            print(f"[Pattern Analysis Error]: {e}")
+            # Keep our calculated patterns
+        
+        return {
+            'title': title,
+            'content': content,
+            'dreamPatterns': dream_pattern
+        }
 
     async def generate_dream_image(self, dream_description: str, style: str = "realistic") -> Dict[str, str]:
         """Generate an image based on the dream description using DALL-E 3"""
@@ -289,4 +431,4 @@ class OpenAIManager:
             Style: photorealistic, detailed, cinematic lighting.
             Dark, moody atmosphere with stormy skies, rough terrain, and dramatic lighting that conveys emotional weight and psychological tension.
             Realistic environmental elements that reflect the serious nature of inner psychological processes.
-            """        
+            """
