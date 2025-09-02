@@ -20,7 +20,7 @@ class OpenAIManager:
         # Model configurations
         self.chat_model = "gpt-4o-mini"  # Better for JSON formatting than gpt-3.5-turbo
         self.image_model = "dall-e-3"
-        self.max_tokens = 2000
+        self.max_tokens = 512
         self.temperature = 0.3  # Lower temperature for more consistent JSON output
         
         # Define common system message to avoid duplication
