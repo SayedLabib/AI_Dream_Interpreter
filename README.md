@@ -62,9 +62,9 @@ A sophisticated FastAPI-based web service that combines the power of **OpenAI's 
    ```
 
 4. **Access the application**
-   - **API Base**: http://localhost:8020
-   - **Interactive Docs**: http://localhost:8020/docs
-   - **Health Check**: http://localhost:8020/health
+   - **API Base**: http://localhost:8063
+   - **Interactive Docs**: http://localhost:8063/docs
+   - **Health Check**: http://localhost:8063/health
 
 ### 💻 Local Development
 
